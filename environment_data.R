@@ -1,3 +1,14 @@
+library(raster)
+library(ncdf4)
+library(colorRamps)
+library(sdmpredictors)
+library(leaflet)
+library(csv)
+
+atlantic.ext <- extent(-104,-28.58, -39.31,30.69)# atlantic crop for the area I will use - long lat
+atlantic.ext2 <- extent(256,331.52, -39.31,30.69)#atlantic crop for the area I will use - geographic coordinates
+my.colors = colorRampPalette(c("#5E85B8","#EDF0C0","#C13127"))#color to use in graphs
+
 ###sst.daily.mean, dissolved oxygen, ph, salinity mean and range, current velocity mean and range
 ####phytoplankton mean and range### data from Bio-Oracle
 setwd ("C:/Users/Murilo/Desktop/Data/Download data_set")
