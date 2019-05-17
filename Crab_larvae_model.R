@@ -14,6 +14,14 @@ atlantic.ext <- extent(-104,-28.58, -39.31,30.69)# atlantic crop for the area I 
 atlantic.ext2 <- extent(256,331.52, -39.31,30.69)#atlantic crop for the area I will use - geographic coordinates
 my.colors = colorRampPalette(c("#5E85B8","#EDF0C0","#C13127"))#color to use in graphs
 
+#--------------------
+#LOAD SURVIVAL DATA
+
+#CALCULATE SURVIVAL FUNCTION
+#something like: surv= lm( poly(time,3)*temp)
+#extract coefficients from final model to make a survival function
+#survival= function(time, temp){ "Put model here" }
+
 ##################load SST 
 
 setwd ("C:/Users/Murilo/Desktop/Data/Abiotic_data_set/NOAA/Sea surface daily mean temp")
@@ -115,6 +123,8 @@ for(lon.k in 1:length(lons)){ #loop through longitude
         devel.out[lon.k,lat.k,time.k]= which.max(cumGDDs>G)+time.k
     
         #calculate survival
+        #average temperature across development period
+        #use survival function calculated above to predict suvival as a function of duration of development and average temperature
         
          } #end loop timing
       
