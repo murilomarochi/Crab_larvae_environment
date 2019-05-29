@@ -12,6 +12,7 @@ library(maps)
 library(maptools)
 library(margins)
 library(prediction)
+library(ggplot2)
 #===============================================
 ##################atlantic crop area and nice colors for maps
 atlantic.ext <- extent(-104,-28.58, -40,34.69)# atlantic crop for the area I will use - long lat
@@ -91,12 +92,24 @@ plot(elide(wrld_simpl, shift = c(360, 0)), add = TRUE)
 To=17.2 ###lower developmental temperature
 G=204.08 ### daily growing degree days 
 
+#survival function from below, needs checking and fixing
+survi.function=function(day,temp){
+  surv= 2.7931035  -3.3789256*day + 1.7749461*day^2 -0.2621086*day^3 + 0.0122824*day^4 -0.0720098*temp +0.1335313*day^1*temp  -0.0693260*day^2*temp  +0.0101202*day^3*temp  -0.0004729*day^4*temp
+  #constraint from zero to 1
+  surv[surv<0]=0
+  surv[surv>1]=1
+  return(surv)  
+}
+
 #define seasonal timing in terms of days of year
 times2=1:90 # selecting days from January 1st to March 31th
 times2.1=257:365 #selecting days from Setempber to December 31th    
 
 #make arrays for output
+#development
 devel.out= array(NA, dim=c(length(lons),length(lats),length(times2)))
+#survival
+surv.out= array(NA, dim=c(length(lons),length(lats),length(times2)))
 
 for(lon.k in 1:length(lons)){ #loop through longitude
   
@@ -120,10 +133,19 @@ for(lon.k in 1:length(lons)){ #loop through longitude
         cumGDDs= cumGDDs-cumGDDs[1]
         
         #find first date the exceed G
+        
         devel.out[lon.k,lat.k,time.k]= which.max(cumGDDs>G)+time.k
         
-        #calculate survival
-        
+        #estimate survival until reaching G
+        day= which.max(cumGDDs>G)
+        #mean temp
+        ### constrain to end of year, NEED TO FIX
+        end.day= times2[time.k]+day
+        if(end.day>365)end.day=365
+        temps= mean(temp[lon.k,lat.k,times2[time.k]:end.day])
+        #estimate survival
+        surv.out[lon.k,lat.k,time.k]= survi.function(day, temps)
+      
       } #end loop timing
       
     }#end latitude loop
@@ -136,9 +158,17 @@ devel.out[lon.k,lat.k,]
 image.plot(lons,lats,devel.out[,,50],col=my.colors(1000))
 data(wrld_simpl)
 plot(elide(wrld_simpl, shift = c(360, 0)), add = TRUE)
+#plot out corresponding survival
+image.plot(lons,lats,surv.out[,,50],col=my.colors(1000))
+data(wrld_simpl)
+plot(elide(wrld_simpl, shift = c(360, 0)), add = TRUE)
 
+
+#==========================
 ###survival data Menippe nodifrons
 setwd ("C:/Users/Murilo/Desktop/Data/Abiotic_data_set/NOAA/Sea surface daily mean temp")
+#to read from Google Drive
+setwd("/Volumes/GoogleDrive/Team Drives/TrEnCh/Projects/Murilo/")
 dir()
 Survival_mydata<-read.table("survival_Menippe_mydata.txt",header=T)
 Survival_Scotto=read.table("survival_Menippe_Scotto_1979.txt",header=T)
@@ -146,9 +176,47 @@ Survival_Scotto=read.table("survival_Menippe_Scotto_1979.txt",header=T)
 survi=Survival_mydata$surv
 day=Survival_mydata$day
 temperatura=Survival_mydata$temp
-mod1= lm(survi~poly(day)*temperatura)
+
+#combine data
+names(Survival_Scotto)[3]<-"surv"
+#turn Scotto data into percent
+Survival_Scotto$surv= Survival_Scotto$surv/100
+surv.dat= rbind(Survival_Scotto, Survival_mydata)
+
+#plot data and check different polynomial degrees
+ggplot(Survival_mydata, aes(x=day, y=surv, color=temp, group=temp)) + geom_point() + 
+  geom_smooth(method="lm", formula=y~poly(x, 4))
+
+ggplot(Survival_Scotto, aes(x=day, y=surv, color=temp, group=temp)) + geom_point() + 
+  geom_smooth(method="lm", formula=y~poly(x, 4))
+
+#plot combined
+ggplot(surv.dat, aes(x=day, y=surv, color=temp, group=temp)) + geom_point() + 
+  geom_smooth(method="lm", formula=y~poly(x, 4))
+
+#-------------
+
+mod1= lm(surv~poly(day,4, raw=TRUE)*temp, data=Survival_mydata)
+
+mod1= lm(surv~ day + I(day^2) + I(day^3) + I(day^4) + temp +day:temp + I(day^2):temp + I(day^3):temp + I(day^4):temp, data=Survival_mydata)
+#check model         
+plot(day, survi)
+points(day, predict(mod1), col="red")
+#extract coefficients
+coefs= coef(mod1)
+
+#make function manually or coudl use the predict() function
+survi.function=function(day,temp){
+  surv= 2.7931035  -3.3789256*day + 1.7749461*day^2 -0.2621086*day^3 + 0.0122824*day^4 -0.0720098*temp +0.1335313*day^1*temp  -0.0693260*day^2*temp  +0.0101202*day^3*temp  -0.0004729*day^4*temp
+  #constraint from zero to 1
+  surv[surv<0]=0
+  surv[surv>1]=1
+  return(surv)  
+}
+
+
+#====================
 summary(mod1)
-mod.coef=print(mod1)
 par(mfrow=c(2,2))
 plot(mod1)# vizualize the residuals effect and quality of the models R²=0.89
 coef.temp=-0.1332
