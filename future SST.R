@@ -40,6 +40,10 @@ dim(times)
 times1= as.Date(times, origin="0001-01-01")#convert to Julian date, since 0001-01-01
 times1
 
+#estimate years and doys
+years=as.numeric(format(times1,"%Y"))
+doys= as.numeric(format(times1,"%j"))
+
 #subset data to area of interest
 lats.sel= which(lats>(80)&lats<(198))#specific area of interest in atlantic ocean
 lons.sel= which(lons>(180)&lons<(260))#specific area of interest in atlantic ocean
@@ -76,20 +80,25 @@ image.plot(lons[lons.sel],lats[lats.sel],surface_temp[,,1600],col=my.colors(1000
 
 # selecting days from January 1st to March 31th and October 1st to December 31th of yeach year
 times2=c(1:91,275:457,640:821,1005:1186,1370:1553,1737:1917,2101:2282,2466:2647,2831:3013,3197:3378,3562:3653)
+#select seasons, start and end dates
+#inds=cbind(c(275, 640, 1005, 1370, 1737, 2101, 2466, 2831, 3197, 3562),c(457,821,1186,1553,1917,2282,2647,3013,3378,3653))
+inds=cbind(c(274, 639, 1004, 1370, 1735, 2100, 2465, 2831, 3196),c(455,820,1186,1551,1916,2281,2647,3012,3377))
+years.inds= years[times2]
+doys.inds= doys[times2]
 
-sst= surface_temp[,,1:91]
+#sst= surface_temp[,,1:91]
 
-times3=1:91
+times3=c(275:366,1:91)
 
 #update latitudes and longitudes
 lons= lons[lons.sel]
 lats= lats[lats.sel]
 
-#make arrays for output
+#make arrays for output, add dimension for future periods
 #development
-devel.out= array(NA, dim=c(length(lons),length(lats),length(times3)))
+devel.out= array(NA, dim=c(length(lons),length(lats),length(times3),nrow(inds) ))
 #survival
-surv.out= array(NA, dim=c(length(lons),length(lats),length(times3)))
+surv.out= array(NA, dim=c(length(lons),length(lats),length(times3),nrow(inds) ))
 
 for(lon.k in 1:length(lons)){ #loop through longitude
   lats.sel2= which(!is.na(sst[lon.k,,1]))#find latitudes with data
@@ -97,29 +106,36 @@ for(lon.k in 1:length(lons)){ #loop through longitude
   if(length(lats.sel2)>0){ #check there's cells with data
     
     for(lat.k in lats.sel2){ #loop through latitudes with data
-      #estimate growing degree days
-      GDDs= sst[lon.k,lat.k,]-To #how many growing degree days per day
-      #cummulative sum of GDDs
-      cumGDDs=cumsum(GDDs) 
-      
-      for(time.k in times3){ #estimate development time starting at different days
-        cumGDDs= cumsum(GDDs[times3[time.k]:91])####
+     
+      for(yr.k in 1:nrow(inds)){ #loop through seasons
+        
+        #extract start and end dates
+        inds.seas= inds[yr.k,1]:inds[yr.k,2] 
+        
+        #estimate growing degree days
+        GDDs= surface_temp[lon.k,lat.k,inds.seas]-To #how many growing degree days per day
+        #cummulative sum of GDDs
+        cumGDDs=cumsum(GDDs) 
+        
+      for(time.k in 1:length(inds.seas)){ #estimate development time starting at different days
+        
         #substract off starting value
-        cumGDDs= cumGDDs-cumGDDs[1]
+        cumGDDs.t= cumGDDs-cumGDDs[time.k]
         
         #find first date the exceed G
-        devel.out[lon.k,lat.k,time.k]= which.max(cumGDDs>G)+time.k
-        
+        dev.ind= which.max(cumGDDs.t>G) #development duration
+        devel.out[lon.k,lat.k,time.k,yr.k]= doys.inds[inds.seas[dev.ind]]
+          
         #estimate survival until reaching G
-        day= which.max(cumGDDs>G)
         #mean temp
-        ### constrain to end of year
-        end.day= times3[time.k]+day
-        if(end.day>91)end.day=91
-        temps= mean(sst[lon.k,lat.k,times3[time.k]:end.day])
+        if(dev.ind>1){#if complex development
+        temps= mean(surface_temp[lon.k,lat.k,inds.seas[time.k]:inds.seas[dev.ind]])
         #estimate survival
-        surv.out[lon.k,lat.k,time.k]= survi.function(day, temps)
+        surv.out[lon.k,lat.k,time.k,yr.k]= survi.function(dev.ind-time.k, temps)
+        } #end check complete development
       } #end loop timing
+        
+      } #end loop seasons
     }#end latitude loop
   } #end check for data
 } #end longitude loop
@@ -133,3 +149,9 @@ image.plot(lons,lats,devel.out[,,10], col=my.colors(34),legend.lab = "days to me
 surv.out<-replace(surv.out, surv.out > 0.69 , 0)
 s<-(c(0.3,0.35,0.4,0.45,0.5,0.55))
 image.plot(lons,lats,surv.out[,,60],col=my.colors(1000),legend.lab = "survival to megalopae phase",axis.args=list(at=s, labels=names(s)))
+
+##ADD PLOTS OF DEVELOPMENT AND SURVIVAL
+image.plot(lons,lats,devel.out[,,1,1])
+image.plot(lons,lats,surv.out[,,50,1])
+devel.out[lon.k,lat.k,time.k,yr.k]
+
